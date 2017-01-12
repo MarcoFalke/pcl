@@ -143,6 +143,78 @@ TEST (PCL, PrincipalCurvaturesEstimation)
   EXPECT_NEAR (pcs->points[indices.size () - 1].pc2, 0.17906941473484039, 1e-4);
 }
 
+TEST (PCL, PrincipalCurvaturesEstimationMLS)
+{
+  float pc1, pc2;
+
+  // Estimate normals first
+  NormalEstimation<PointXYZ, Normal> n;
+  PointCloud<Normal>::Ptr normals (new PointCloud<Normal> ());
+  // set parameters
+  n.setInputCloud (cloud.makeShared ());
+  boost::shared_ptr<vector<int> > indicesptr (new vector<int> (indices));
+  n.setIndices (indicesptr);
+  n.setSearchMethod (tree);
+  n.setKSearch (10); // Use 10 nearest neighbors to estimate the normals
+  // estimate
+  n.compute (*normals);
+
+  PrincipalCurvaturesEstimationMLS<PointXYZ, Normal, PrincipalCurvatures> pc;
+  pc.setInputCloud (cloud.makeShared ());
+  pc.setInputNormals (normals);
+  pc.setGaussianParam (0.09);
+  EXPECT_EQ (pc.getInputNormals (), normals);
+
+  // computePointPrincipalCurvatures (indices)
+  pc.computePointPrincipalCurvatures (*normals, 0, indices, pc1, pc2);
+  EXPECT_NEAR (pc1, .221577, 1e-4);
+  EXPECT_NEAR (pc2, -3.039861, 1e-4);
+
+  pc.computePointPrincipalCurvatures (*normals, 2, indices, pc1, pc2);
+  EXPECT_NEAR (pc1,.899370 , 1e-4);
+  EXPECT_NEAR (pc2, -.112790, 1e-4);
+
+  int indices_size = static_cast<int> (indices.size ());
+  pc.computePointPrincipalCurvatures (*normals, indices_size - 3, indices, pc1, pc2);
+  EXPECT_NEAR (pc1, 17.171513, 1e-4);
+  EXPECT_NEAR (pc2, 10.561937, 1e-4);
+
+  pc.computePointPrincipalCurvatures (*normals, indices_size - 1, indices, pc1, pc2);
+  EXPECT_NEAR (pc1, 11.597512,  1e-4);
+  EXPECT_NEAR (pc2, 9.6301031, 1e-4);
+
+  // Object
+  PointCloud<PrincipalCurvatures>::Ptr pcs (new PointCloud<PrincipalCurvatures> ());
+
+  // set parameters
+  pc.setKSearch (30);
+  pc.setIndices (indicesptr);
+  pc.setSearchMethod (tree);
+#ifdef _OPENMP
+  pc.setNumberOfThreads(0);  // 0 for auto
+#endif
+
+  // estimate
+  pc.compute (*pcs);
+  EXPECT_EQ (pcs->points.size (), indices.size ());
+
+  // Adjust for small numerical inconsitencies (due to nn_indices not being sorted)
+  EXPECT_EQ (pcs->points[0].principal_curvature[0], 0);
+  EXPECT_EQ (pcs->points[0].principal_curvature[1], 0);
+  EXPECT_EQ (pcs->points[0].principal_curvature[2], 0);
+  EXPECT_NEAR (pcs->points[0].pc1, +0.35759, 1e-4);
+  EXPECT_NEAR (pcs->points[0].pc2, -0.13025, 1e-4);
+
+  EXPECT_NEAR (pcs->points[2].pc1, -0.1374259, 1e-4);
+  EXPECT_NEAR (pcs->points[2].pc2, -0.4583553, 1e-4);
+
+  EXPECT_NEAR (pcs->points[indices.size () - 3].pc1, 2.8763389, 1e-4);
+  EXPECT_NEAR (pcs->points[indices.size () - 3].pc2, 0.1307892, 1e-4);
+
+  EXPECT_NEAR (pcs->points[indices.size () - 1].pc1, 3.5303897, 1e-4);
+  EXPECT_NEAR (pcs->points[indices.size () - 1].pc2, 2.6073670, 1e-4);
+}
+
 /* ---[ */
 int
 main (int argc, char** argv)

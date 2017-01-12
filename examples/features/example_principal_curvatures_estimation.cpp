@@ -76,28 +76,44 @@ main (int, char** argv)
 
   normal_estimation.compute (*cloud_with_normals);
 
-  // Setup the principal curvatures computation
+  // Setup the principal curvatures computation:
+  // PCA
   pcl::PrincipalCurvaturesEstimation<pcl::PointXYZ, pcl::Normal, pcl::PrincipalCurvatures> principal_curvatures_estimation;
+  // MLS
+  pcl::PrincipalCurvaturesEstimationMLS<pcl::PointXYZ, pcl::Normal, pcl::PrincipalCurvatures> principal_curvatures_estimation_mls;
 
   // Provide the original point cloud (without normals)
   principal_curvatures_estimation.setInputCloud (cloud);
+  principal_curvatures_estimation_mls.setInputCloud (cloud);
 
   // Provide the point cloud with normals
   principal_curvatures_estimation.setInputNormals (cloud_with_normals);
+  principal_curvatures_estimation_mls.setInputNormals (cloud_with_normals);
 
   // Use the same KdTree from the normal estimation
   principal_curvatures_estimation.setSearchMethod (tree);
   principal_curvatures_estimation.setRadiusSearch (1.0);
+  principal_curvatures_estimation_mls.setSearchMethod (tree);
+  principal_curvatures_estimation_mls.setKSearch (90);
+  principal_curvatures_estimation_mls.setGaussianParam(0.09);
+#ifdef _OPENMP
+  principal_curvatures_estimation_mls.setNumberOfThreads(0); // 0 for auto
+#endif
 
   // Actually compute the principal curvatures
-  pcl::PointCloud<pcl::PrincipalCurvatures>::Ptr principal_curvatures (new pcl::PointCloud<pcl::PrincipalCurvatures> ());
-  principal_curvatures_estimation.compute (*principal_curvatures);
+  pcl::PointCloud<pcl::PrincipalCurvatures>::Ptr principal_curvatures_pca (new pcl::PointCloud<pcl::PrincipalCurvatures> ());
+  principal_curvatures_estimation.compute (*principal_curvatures_pca);
+  pcl::PointCloud<pcl::PrincipalCurvatures>::Ptr principal_curvatures_mls (new pcl::PointCloud<pcl::PrincipalCurvatures> ());
+  principal_curvatures_estimation_mls.compute (*principal_curvatures_mls);
 
-  std::cout << "output points.size (): " << principal_curvatures->points.size () << std::endl;
+  std::cout << "output pca eigenval curvature points.size (): " << principal_curvatures_pca->points.size () << std::endl;
+  std::cout << "output mls surface curvature points.size (): " << principal_curvatures_mls->points.size () << std::endl;
 
   // Display and retrieve the shape context descriptor vector for the 0th point.
-  pcl::PrincipalCurvatures descriptor = principal_curvatures->points[0];
-  std::cout << descriptor << std::endl;
+  pcl::PrincipalCurvatures descriptor_evs = principal_curvatures_pca->points[0];
+  std::cout << descriptor_evs << std::endl;
+  pcl::PrincipalCurvatures descriptor_mls = principal_curvatures_mls->points[0];
+  std::cout << descriptor_mls << std::endl;
 
   return 0;
 }

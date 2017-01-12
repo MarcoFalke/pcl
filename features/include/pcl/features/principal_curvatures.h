@@ -40,7 +40,7 @@
 
 #ifndef PCL_PRINCIPAL_CURVATURES_H_
 #define PCL_PRINCIPAL_CURVATURES_H_
-
+#define PCL_HAS_MLS_CURV_IMPL
 #include <pcl/features/eigen.h>
 #include <pcl/features/feature.h>
 
@@ -131,6 +131,103 @@ namespace pcl
       Eigen::Vector3f eigenvector_;
       /** \brief eigenvalues placeholder for a covariance matrix. */
       Eigen::Vector3f eigenvalues_;
+  };
+
+
+
+  /** \brief PrincipalCurvaturesEstimationMLS estimates the principal curvatures of an MLS surface patch for a
+   * given point cloud dataset containing points and normals. The gaussian curvature and mean curvature can be
+   * computed from the principal curvatures.
+   *
+   * The type PointOutT must have the members pc1 and pc2. You can use pcl::PrincipalCurvatures, but note that
+   * the other fields are not set.
+   *
+   * Also, note that this MLS curvature estimation is computationally more expensive than curvature estimation
+   * based on PCA.
+   *
+   * The implemenatation is described in "Direct Computing of Surface Curvatures for Point-Set Surfaces"
+   * \author Pinghai Yang and Xiaoping Qian (2007, original idea)
+   * \author Marco Falke (port to pcl)
+   * \ingroup features
+   */
+  template <typename PointInT, typename PointNT, typename PointOutT = pcl::PrincipalCurvatures>
+  class PrincipalCurvaturesEstimationMLS : public FeatureFromNormals<PointInT, PointNT, PointOutT>
+  {
+    public:
+      typedef boost::shared_ptr<PrincipalCurvaturesEstimationMLS<PointInT, PointNT, PointOutT> > Ptr;
+      typedef boost::shared_ptr<const PrincipalCurvaturesEstimationMLS<PointInT, PointNT, PointOutT> > ConstPtr;
+      using Feature<PointInT, PointOutT>::feature_name_;
+      using Feature<PointInT, PointOutT>::getClassName;
+      using Feature<PointInT, PointOutT>::indices_;
+      using Feature<PointInT, PointOutT>::k_;
+      using Feature<PointInT, PointOutT>::search_parameter_;
+      using Feature<PointInT, PointOutT>::input_;
+      using FeatureFromNormals<PointInT, PointNT, PointOutT>::normals_;
+
+      typedef typename Feature<PointInT, PointOutT>::PointCloudOut PointCloudOut;
+      typedef pcl::PointCloud<PointInT> PointCloudIn;
+
+      /** \brief Empty constructor. */
+      PrincipalCurvaturesEstimationMLS () :
+#ifdef _OPENMP
+          threads_ (0),
+#endif
+          gaussian_param_sq_ (0)
+      {
+        feature_name_ = "PrincipalCurvaturesEstimationMLS";
+      }
+
+      /** \brief Set the width of the Gaussian kernel */
+      void
+      setGaussianParam (float radius)
+      {
+        gaussian_param_sq_ = radius * radius;
+      }
+
+      /** \brief Calculate the moving least squares (MLS) surface based on the input cloud and input normals.
+       *
+       * Returns the principal curvatures (pc1 and pc2) at the position of the given input point on the MLS surface.
+       *
+       * \param[in] normals the point cloud normals
+       * \param[in] p_idx the query point at which the MLS surface and principal curvatures should be calculated
+       * \param[in] indices the point cloud indices that need to be used (They should lie within the Gaussian kernel)
+       * \param[out] pc1 the first principal curvature
+       * \param[out] pc2 the second principal curvature
+       */
+      void
+      computePointPrincipalCurvatures (const pcl::PointCloud<PointNT> &normals,
+                                       int p_idx,
+                                       const std::vector<int> &indices,
+                                       float &pc1,
+                                       float &pc2);
+
+#ifdef _OPENMP
+      /** \brief Initialize the scheduler and set the number of threads to use.
+       * \param nr_threads the number of hardware threads to use (0 sets the value back to automatic)
+       */
+      inline void
+      setNumberOfThreads (unsigned int nr_threads = 0)
+      { threads_ = nr_threads;}
+#endif
+
+    protected:
+
+      /** \brief Estimate the principal curvatures (pc1 and pc2) by calculating the moving least squares surface for
+       * all points given in <setInputCloud (), setIndices ()> using the spatial locator in setSearchMethod ()
+       *
+       * \param[out] output the resultant point cloud model dataset that contains the principal curvature estimates
+       */
+      void
+      computeFeature (PointCloudOut &output);
+
+#ifdef _OPENMP
+      /** \brief The number of threads the scheduler should use. */
+      unsigned int threads_;
+#endif
+
+    private:
+      /** \brief The width of the Gaussian kernel (squared). */
+      float gaussian_param_sq_;
   };
 }
 
